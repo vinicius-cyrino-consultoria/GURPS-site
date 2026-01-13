@@ -4,7 +4,6 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-// Cliente Supabase (lado do servidor)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -14,30 +13,30 @@ export async function login(formData: FormData) {
   const username = formData.get("username") as string;
   const pin = formData.get("pin") as string;
 
-  // 1. Busca o usuário e verifica o PIN (Plain Text conforme solicitado)
   const { data: player, error } = await supabase
     .from("players")
     .select("id")
-    .eq("username", username)
+    .eq("name", username)
     .eq("pin", pin)
     .single();
 
   if (error || !player) {
-    return { error: "Usuário ou PIN incorretos" }; // Retorna erro para o front
+    return { error: "Usuário ou PIN incorretos" };
   }
 
-  // 2. Salva um cookie simples com o ID do jogador (sessão básica)
-  // Nota: Para produção real, use JWT ou Supabase Auth. Isso é "quick & dirty".
-  cookies().set("player_id", player.id, { httpOnly: true });
+  // CORREÇÃO AQUI: Adicionado 'await' antes de cookies()
+  (await cookies()).set("player_id", player.id, { httpOnly: true });
 
   redirect("/ficha");
 }
 
 export async function saveSheet(jsonData: any) {
-  const playerId = cookies().get("player_id")?.value;
+  // CORREÇÃO AQUI: Adicionado 'await'
+  const cookieStore = await cookies();
+  const playerId = cookieStore.get("player_id")?.value;
+
   if (!playerId) return { error: "Não autenticado" };
 
-  // Atualiza ou cria a ficha (upsert)
   const { error } = await supabase
     .from("sheets")
     .upsert(
@@ -50,7 +49,10 @@ export async function saveSheet(jsonData: any) {
 }
 
 export async function getSheet() {
-  const playerId = cookies().get("player_id")?.value;
+  // CORREÇÃO AQUI: Adicionado 'await'
+  const cookieStore = await cookies();
+  const playerId = cookieStore.get("player_id")?.value;
+
   if (!playerId) return null;
 
   const { data } = await supabase
@@ -59,5 +61,5 @@ export async function getSheet() {
     .eq("player_id", playerId)
     .single();
 
-  return data?.data || {}; // Retorna o JSON da ficha ou vazio
+  return data?.data || {};
 }
