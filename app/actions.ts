@@ -39,11 +39,9 @@ export async function saveSheet(jsonData: any) {
 
   const { error } = await supabase
     .from("sheets")
-    .upsert(
-      { player_id: playerId, data: jsonData },
-      { onConflict: "player_id" }
-    );
-
+    .update({ data: jsonData })
+    .eq("player_id", playerId);
+  console.log(error);
   if (error) return { error: "Erro ao salvar" };
   return { success: true };
 }

@@ -3,96 +3,214 @@ import { useEffect, useState } from "react";
 import { getSheet, saveSheet } from "../actions";
 
 export default function Ficha() {
-  // Estado inicial da ficha
-  const [ficha, setFicha] = useState({
-    nome: "",
-    st: 10,
-    dx: 10,
-    iq: 10,
-    ht: 10, // Atributos GURPS
-    hp: 10,
-    anotacoes: "",
-  });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Carregar dados ao entrar
+  // Estado com os campos exatos que você pediu
+  const [ficha, setFicha] = useState({
+    name: "",
+    player: "",
+    point_total: 150, // Padrão GURPS heróico
+    unspent_pts: 0,
+    height: "",
+    weight: "",
+    size_modifier: 0,
+    age: "",
+    appearance: "",
+  });
+
+  // Carregar dados
   useEffect(() => {
     async function load() {
       const data = await getSheet();
       if (data && Object.keys(data).length > 0) {
-        setFicha(data); // Se já existir ficha salva, carrega
+        // Mescla os dados salvos com o estado inicial para garantir que campos novos não quebrem
+        setFicha((prev) => ({ ...prev, ...data }));
       }
       setLoading(false);
     }
     load();
   }, []);
 
-  // Função para salvar
+  // Salvar dados
   async function handleSave() {
+    setSaving(true);
     const res = await saveSheet(ficha);
-    if (res?.success) alert("Ficha salva com sucesso!");
-    else alert("Erro ao salvar.");
+    setSaving(false);
+
+    if (res?.success) {
+      // Feedback visual simples (poderia ser um toast)
+      alert("Ficha salva!");
+    } else {
+      alert("Erro ao salvar.");
+    }
   }
 
-  // Atualiza o estado quando digita
   const handleChange = (e: any) => {
     const { name, value } = e.target;
-    setFicha((prev) => ({ ...prev, [name]: value }));
+    // Converte para número se for campo numérico, senão mantém texto
+    const val = ["point_total", "unspent_pts", "size_modifier"].includes(name)
+      ? Number(value)
+      : value;
+
+    setFicha((prev) => ({ ...prev, [name]: val }));
   };
 
-  if (loading) return <div>Carregando grimório...</div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-blue-400">
+        <span className="animate-pulse text-xl">Carregando Grimório...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto bg-gray-100 min-h-screen text-black">
-      <h1 className="text-3xl font-bold mb-6">Ficha de Personagem (GURPS)</h1>
+    <div className="min-h-screen p-4 md:p-8 pb-24">
+      <div className="max-w-4xl mx-auto bg-gray-800 border border-gray-700 shadow-2xl rounded-xl overflow-hidden">
+        {/* Cabeçalho Visual */}
+        <div className="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center">
+          <h1 className="text-xl font-bold text-gray-200 uppercase tracking-wider">
+            GURPS Character Sheet
+          </h1>
+          <span className="text-xs text-gray-500">4th Edition</span>
+        </div>
 
-      {/* Dados Básicos */}
-      <div className="mb-4">
-        <label className="block font-bold">Nome do Personagem</label>
-        <input
-          name="nome"
-          value={ficha.nome}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
-      </div>
-
-      {/* Atributos Principais */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {["st", "dx", "iq", "ht"].map((attr) => (
-          <div key={attr} className="text-center">
-            <label className="block font-bold uppercase">{attr}</label>
-            <input
-              name={attr}
-              type="number"
-              value={(ficha as any)[attr]}
-              onChange={handleChange}
-              className="w-full p-2 border rounded text-center text-xl"
-            />
+        <div className="p-6 grid gap-6">
+          {/* SEÇÃO 1: Identidade */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputGroup label="Name">
+              <input
+                name="name"
+                value={ficha.name}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </InputGroup>
+            <InputGroup label="Player">
+              <input
+                name="player"
+                value={ficha.player}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </InputGroup>
           </div>
-        ))}
+
+          <hr className="border-gray-700" />
+
+          {/* SEÇÃO 2: Dados Físicos e Pontos */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <InputGroup label="Point Total">
+              <input
+                type="number"
+                name="point_total"
+                value={ficha.point_total}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center font-mono"
+              />
+            </InputGroup>
+
+            <InputGroup label="Unspent Pts">
+              <input
+                type="number"
+                name="unspent_pts"
+                value={ficha.unspent_pts}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center font-mono"
+              />
+            </InputGroup>
+
+            <InputGroup label="Size Modifier">
+              <input
+                type="number"
+                name="size_modifier"
+                value={ficha.size_modifier}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center"
+              />
+            </InputGroup>
+
+            <InputGroup label="Age">
+              <input
+                type="text"
+                name="age"
+                value={ficha.age}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center"
+              />
+            </InputGroup>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <InputGroup label="Ht (Height)">
+              <input
+                name="height"
+                placeholder="Ex: 1.80m"
+                value={ficha.height}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+              />
+            </InputGroup>
+
+            <InputGroup label="Wt (Weight)">
+              <input
+                name="weight"
+                placeholder="Ex: 80kg"
+                value={ficha.weight}
+                onChange={handleChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+              />
+            </InputGroup>
+          </div>
+
+          <hr className="border-gray-700" />
+
+          {/* SEÇÃO 3: Aparência */}
+          <InputGroup label="Appearance">
+            <textarea
+              name="appearance"
+              rows={3}
+              value={ficha.appearance}
+              onChange={handleChange}
+              placeholder="Descreva a aparência do personagem..."
+              className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+          </InputGroup>
+        </div>
       </div>
 
-      {/* Área de Texto Livre */}
-      <div className="mb-4">
-        <label className="block font-bold">
-          Anotações / Vantagens / Perícias
-        </label>
-        <textarea
-          name="anotacoes"
-          value={ficha.anotacoes}
-          onChange={handleChange}
-          rows={10}
-          className="w-full p-2 border rounded"
-        />
-      </div>
-
+      {/* Botão Flutuante de Salvar */}
       <button
         onClick={handleSave}
-        className="fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg hover:bg-green-500 font-bold"
+        disabled={saving}
+        className={`fixed bottom-6 right-6 px-6 py-4 rounded-full shadow-lg font-bold text-white transition-all flex items-center gap-2
+          ${
+            saving
+              ? "bg-gray-600 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-500 hover:scale-105"
+          }
+        `}
       >
-        Salvar Ficha 💾
+        {saving ? "Salvando..." : "Salvar Ficha 💾"}
       </button>
+    </div>
+  );
+}
+
+// Componente auxiliar para padronizar as labels
+function InputGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs uppercase font-bold text-gray-400 tracking-wider">
+        {label}
+      </label>
+      {children}
     </div>
   );
 }
