@@ -18,6 +18,10 @@ export default function NovaFichaWizard({ onCancel, onCreate }: WizardProps) {
     player: "",
     point_total: 150,
     attributes: { ST: 10, DX: 10, IQ: 10, HT: 10 },
+    // Novos campos
+    height: "",
+    weight: "",
+    sm: 0,
   });
 
   // Recalcula pontos gastos sempre que atributos mudam
@@ -27,6 +31,11 @@ export default function NovaFichaWizard({ onCancel, onCreate }: WizardProps) {
     cost += (draft.attributes.DX - 10) * COSTS.DX;
     cost += (draft.attributes.IQ - 10) * COSTS.IQ;
     cost += (draft.attributes.HT - 10) * COSTS.HT;
+
+    // Nota: Em GURPS, SM positivo geralmente custa 0 pontos (feature),
+    // mas reduz o custo de ST. SM negativo também é feature.
+    // Não vamos alterar o custo aqui para manter simples, mas poderia ser feito.
+
     setSpent(cost);
   }, [draft.attributes]);
 
@@ -69,6 +78,8 @@ export default function NovaFichaWizard({ onCancel, onCreate }: WizardProps) {
               <h3 className="text-blue-400 font-bold uppercase text-sm">
                 Passo 1: Conceito
               </h3>
+
+              {/* Nome */}
               <div>
                 <label className="block text-xs uppercase text-gray-500 mb-1">
                   Nome
@@ -78,8 +89,57 @@ export default function NovaFichaWizard({ onCancel, onCreate }: WizardProps) {
                   onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white focus:border-blue-500 outline-none"
                   autoFocus
+                  placeholder="Ex: Dai Blackthorn"
                 />
               </div>
+
+              {/* Grid de Tamanho e Peso */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs uppercase text-gray-500 mb-1">
+                    Altura
+                  </label>
+                  <input
+                    value={draft.height}
+                    onChange={(e) =>
+                      setDraft({ ...draft, height: e.target.value })
+                    }
+                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white outline-none"
+                    placeholder="1.75m"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-gray-500 mb-1">
+                    Peso
+                  </label>
+                  <input
+                    value={draft.weight}
+                    onChange={(e) =>
+                      setDraft({ ...draft, weight: e.target.value })
+                    }
+                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white outline-none"
+                    placeholder="75kg"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block text-xs uppercase text-gray-500 mb-1"
+                    title="Size Modifier"
+                  >
+                    SM (Tam.)
+                  </label>
+                  <input
+                    type="number"
+                    value={draft.sm}
+                    onChange={(e) =>
+                      setDraft({ ...draft, sm: Number(e.target.value) })
+                    }
+                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Nível de Poder */}
               <div>
                 <label className="block text-xs uppercase text-gray-500 mb-1">
                   Nível de Poder
@@ -159,16 +219,29 @@ export default function NovaFichaWizard({ onCancel, onCreate }: WizardProps) {
               </h3>
               <div className="bg-gray-800 p-4 rounded text-left text-sm space-y-2 text-gray-300">
                 <p>
-                  <strong>Nome:</strong> {draft.name || "Sem Nome"}
+                  <strong className="text-gray-400">Nome:</strong>{" "}
+                  {draft.name || "Sem Nome"}
                 </p>
+                <div className="flex gap-4 text-xs text-gray-500 mb-2">
+                  <span>SM: {draft.sm > 0 ? `+${draft.sm}` : draft.sm}</span>
+                  <span>Alt: {draft.height || "N/A"}</span>
+                  <span>Peso: {draft.weight || "N/A"}</span>
+                </div>
                 <p>
-                  <strong>Pontos:</strong> {spent} gastos / {remaining} sobrando
+                  <strong className="text-gray-400">Pontos:</strong> {spent}{" "}
+                  gastos / {remaining} sobrando
                 </p>
-                <hr className="border-gray-700" />
-                <p className="font-mono text-center pt-2 text-white">
-                  ST {draft.attributes.ST} • DX {draft.attributes.DX} • IQ{" "}
-                  {draft.attributes.IQ} • HT {draft.attributes.HT}
-                </p>
+                <hr className="border-gray-700 my-2" />
+                <div className="grid grid-cols-4 gap-2 text-center pt-1">
+                  {Object.entries(draft.attributes).map(([key, val]) => (
+                    <div key={key} className="bg-gray-700/50 rounded p-1">
+                      <div className="text-[10px] text-gray-500 font-bold">
+                        {key}
+                      </div>
+                      <div className="text-white font-mono">{val}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
