@@ -8,6 +8,7 @@ export default function Ficha() {
   const [saving, setSaving] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
 
+  // Estado inicial padrão (ficha vazia/nova)
   const [ficha, setFicha] = useState({
     name: "",
     player: "",
@@ -21,43 +22,53 @@ export default function Ficha() {
     appearance: "",
   });
 
-  // 1. Carregar dados do servidor
+  // 1. LÓGICA ALTERADA: Carregar dados e decidir se abre o Wizard
   useEffect(() => {
     async function load() {
-      const data = await getSheet();
-      if (data && Object.keys(data).length > 0) {
-        const safeData = {
-          ...data,
-          attributes: data.attributes || { ST: 10, DX: 10, IQ: 10, HT: 10 },
-        };
-        setFicha((prev) => ({ ...prev, ...safeData }));
+      try {
+        const data = await getSheet();
+
+        // Verifica se data existe e se NÃO é um objeto vazio
+        const hasData = data && Object.keys(data).length > 0;
+
+        if (hasData) {
+          // Se TEM dados, carrega na ficha
+          const safeData = {
+            ...data,
+            attributes: data.attributes || { ST: 10, DX: 10, IQ: 10, HT: 10 },
+          };
+          setFicha((prev) => ({ ...prev, ...safeData }));
+        } else {
+          // Se NÃO tem dados (JSON {}), abre direto o modal de criação
+          setShowWizard(true);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar ficha:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     load();
   }, []);
 
-  // 2. NOVA LÓGICA: Recalcular pontos restantes automaticamente
+  // 2. Recalcular pontos restantes automaticamente
   useEffect(() => {
-    if (loading) return; // Não calcula durante o carregamento inicial para evitar flash
+    if (loading) return;
 
     const COSTS = { ST: 10, DX: 20, IQ: 20, HT: 10 };
 
-    // Calcula o custo total dos atributos atuais
     let spent = 0;
     spent += (ficha.attributes.ST - 10) * COSTS.ST;
     spent += (ficha.attributes.DX - 10) * COSTS.DX;
     spent += (ficha.attributes.IQ - 10) * COSTS.IQ;
     spent += (ficha.attributes.HT - 10) * COSTS.HT;
 
-    // Pontos Restantes = Total - Gastos
     const remaining = ficha.point_total - spent;
 
-    // Só atualiza o estado se o valor for diferente para evitar renderizações infinitas
     if (ficha.unspent_pts !== remaining) {
       setFicha((prev) => ({ ...prev, unspent_pts: remaining }));
     }
-  }, [ficha.attributes, ficha.point_total, loading]); // Executa sempre que atributos ou total mudam
+  }, [ficha.attributes, ficha.point_total, loading]);
 
   // Salvar dados
   async function handleSave(dataToSave = ficha) {
@@ -93,8 +104,8 @@ export default function Ficha() {
 
   const handleCreateNew = async (newCharData: any) => {
     setShowWizard(false);
-    setFicha(newCharData);
-    await handleSave(newCharData);
+    setFicha(newCharData); // Atualiza a UI com os dados do Wizard
+    await handleSave(newCharData); // Salva no banco imediatamente
   };
 
   if (loading) {
@@ -107,12 +118,18 @@ export default function Ficha() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 pb-24 relative">
+      {/* O Wizard é renderizado aqui se showWizard for true */}
       {showWizard && (
         <NovaFichaWizard
           onCancel={() => setShowWizard(false)}
           onCreate={handleCreateNew}
         />
       )}
+
+      {/* OPCIONAL: Se quiser esconder a ficha completamente enquanto o wizard estiver aberto 
+        quando não houver dados, você pode adicionar uma classe de opacidade ou condicional.
+        Por padrão, deixei visível ao fundo (como é comum em modais), mas abaixo está a estrutura normal.
+      */}
 
       <div className="max-w-4xl mx-auto bg-gray-800 border border-gray-700 shadow-2xl rounded-xl overflow-hidden">
         <div className="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center">
@@ -153,7 +170,7 @@ export default function Ficha() {
 
           <hr className="border-gray-700" />
 
-          {/* Atributos (Calculam Pontos Automaticamente) */}
+          {/* Atributos */}
           <div>
             <h3 className="text-xs font-bold text-blue-400 uppercase mb-3 tracking-widest">
               Primary Attributes
@@ -200,7 +217,7 @@ export default function Ficha() {
                 type="number"
                 name="unspent_pts"
                 value={ficha.unspent_pts}
-                readOnly // Impede edição manual, já que é calculado
+                readOnly
                 className={`w-full border border-gray-600 rounded p-2 text-center font-mono font-bold cursor-not-allowed
                   ${
                     ficha.unspent_pts < 0
