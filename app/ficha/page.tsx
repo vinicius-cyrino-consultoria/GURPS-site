@@ -649,46 +649,6 @@ export default function Ficha() {
                     </button>
                   ))}
                 </div>
-
-                {/* Custom Trait Adder */}
-                <div className="border-t border-gray-700 pt-4">
-                  <h4 className="text-gray-400 text-xs uppercase font-bold mb-2">
-                    Custom Trait
-                  </h4>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const form = e.target as any;
-                      addTrait({
-                        id: "custom_" + Date.now(),
-                        label: form.tName.value,
-                        points: Number(form.tCost.value),
-                      });
-                      form.reset();
-                    }}
-                    className="flex gap-2"
-                  >
-                    <input
-                      name="tName"
-                      required
-                      placeholder="Trait Name"
-                      className="flex-1 bg-gray-700 rounded px-2 text-sm text-white"
-                    />
-                    <input
-                      name="tCost"
-                      required
-                      type="number"
-                      placeholder="Pts"
-                      className="w-16 bg-gray-700 rounded px-2 text-sm text-white"
-                    />
-                    <button
-                      type="submit"
-                      className="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded text-sm font-bold"
-                    >
-                      +
-                    </button>
-                  </form>
-                </div>
               </div>
 
               {/* RIGHT: Selected List (Editable) */}
