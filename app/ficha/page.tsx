@@ -2,10 +2,8 @@
 import { useEffect, useState } from "react";
 import { getSheet, saveSheet } from "../actions";
 import NovaFichaWizard from "../../components/NovaFichaWizard";
-import { SAMPLE_TRAITS } from "../../utils/utils";
-
-// --- DADOS DE EXEMPLO DE VANTAGENS (GURPS) ---
-// ADICIONADO: Campo 'description' para o modal
+// Importe o novo componente
+import TraitsTab from "../../components/TraitsTab";
 
 // --- DADOS DE APARÊNCIA (GURPS 4e) ---
 const APPEARANCE_OPTIONS = [
@@ -87,7 +85,6 @@ function getDamage(st: number) {
     20: { thr: "2d-1", sw: "3d+2" },
   };
   if (lookup[st]) return lookup[st];
-  // Fallback simples
   const base = Math.floor((st - 1) / 2);
   return {
     thr: st < 10 ? "1d-3" : `${Math.floor(st / 10)}d`,
@@ -122,10 +119,7 @@ export default function Ficha() {
   const [activeTab, setActiveTab] = useState<"main" | "traits">("main");
   const [ficha, setFicha] = useState(INITIAL_STATE);
 
-  // NOVO ESTADO: Controla qual traço está sendo exibido no modal
-  const [viewingTrait, setViewingTrait] = useState<
-    (typeof SAMPLE_TRAITS)[0] | null
-  >(null);
+  // REMOVIDO: const [viewingTrait, setViewingTrait] ... (agora está no filho)
 
   // --- CÁLCULOS DERIVADOS ---
   const { ST, DX, IQ, HT } = ficha.attributes;
@@ -144,7 +138,7 @@ export default function Ficha() {
     APPEARANCE_OPTIONS.find((a) => a.id === ficha.appearance_id) ||
     APPEARANCE_OPTIONS[5];
 
-  // Níveis de Carga (Simplificado para visualização)
+  // Níveis de Carga (Simplificado)
   const encumbranceLevels = [
     {
       lvl: 0,
@@ -214,17 +208,12 @@ export default function Ficha() {
     const COSTS = { ST: 10, DX: 20, IQ: 20, HT: 10 };
     let spent = 0;
 
-    // Atributos
     spent += (ficha.attributes.ST - 10) * COSTS.ST;
     spent += (ficha.attributes.DX - 10) * COSTS.DX;
     spent += (ficha.attributes.IQ - 10) * COSTS.IQ;
     spent += (ficha.attributes.HT - 10) * COSTS.HT;
-
-    // Aparência
     spent +=
       APPEARANCE_OPTIONS.find((a) => a.id === ficha.appearance_id)?.points || 0;
-
-    // Vantagens/Desvantagens
     spent += ficha.traits.reduce((acc, t) => acc + t.points, 0);
 
     const remaining = ficha.point_total - spent;
@@ -264,7 +253,8 @@ export default function Ficha() {
     }));
   };
 
-  const addTrait = (trait: { id: string; label: string; points: number }) => {
+  // Funções de manipulação de Traços (Vantagens/Desvantagens)
+  const addTrait = (trait: any) => {
     setFicha((prev) => ({
       ...prev,
       traits: [...prev.traits, { ...trait, note: "" }],
@@ -280,6 +270,12 @@ export default function Ficha() {
   const updateTraitPoints = (index: number, points: number) => {
     const newTraits = [...ficha.traits];
     newTraits[index].points = points;
+    setFicha((prev) => ({ ...prev, traits: newTraits }));
+  };
+
+  const updateTraitNote = (index: number, note: string) => {
+    const newTraits = [...ficha.traits];
+    newTraits[index].note = note;
     setFicha((prev) => ({ ...prev, traits: newTraits }));
   };
 
@@ -386,9 +382,8 @@ export default function Ficha() {
         <div className="p-4 bg-gray-800 min-h-[500px]">
           {activeTab === "main" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              {/* LEFT COL: Attributes (Compact) - Span 4 */}
+              {/* LEFT COL: Attributes (Span 4) */}
               <div className="lg:col-span-4 space-y-4">
-                {/* Primary Attributes Box */}
                 <div className="bg-gray-900/50 rounded border border-gray-700 p-3">
                   <div className="grid grid-cols-2 gap-3">
                     {["ST", "DX", "IQ", "HT"].map((attr) => (
@@ -416,7 +411,6 @@ export default function Ficha() {
                   </div>
                 </div>
 
-                {/* Secondary Grid (HP/Will/Per/FP) */}
                 <div className="grid grid-cols-2 gap-2 text-center">
                   <DerivedStat label="HP" value={hp} sub={`ST ${ST}`} />
                   <DerivedStat label="FP" value={fp} sub={`HT ${HT}`} />
@@ -424,7 +418,6 @@ export default function Ficha() {
                   <DerivedStat label="Per" value={per} sub={`IQ ${IQ}`} />
                 </div>
 
-                {/* Basic Lift & Speed */}
                 <div className="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm space-y-2">
                   <div className="flex justify-between">
                     <span>Basic Lift</span>{" "}
@@ -451,9 +444,8 @@ export default function Ficha() {
                 </div>
               </div>
 
-              {/* MIDDLE COL: Traits & Appearance - Span 5 */}
+              {/* MIDDLE COL: Traits & Appearance (Span 5) */}
               <div className="lg:col-span-5 space-y-4">
-                {/* Appearance Compact */}
                 <div className="bg-gray-900/30 p-3 rounded border border-gray-700 flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold uppercase text-gray-500">
@@ -513,9 +505,10 @@ export default function Ficha() {
                         className="flex justify-between text-sm hover:bg-gray-800 px-2 rounded group"
                       >
                         <span>
-                          {t.label}{" "}
+                          {t.label}
                           {t.note && (
                             <span className="text-gray-500 text-xs italic">
+                              {" "}
                               - {t.note}
                             </span>
                           )}
@@ -537,9 +530,8 @@ export default function Ficha() {
                 </div>
               </div>
 
-              {/* RIGHT COL: Encumbrance & Bio - Span 3 */}
+              {/* RIGHT COL: Encumbrance & Bio (Span 3) */}
               <div className="lg:col-span-3 space-y-4">
-                {/* Compact Encumbrance Table */}
                 <div className="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
                   <table className="w-full text-[10px] text-left">
                     <thead className="bg-gray-800 text-gray-400">
@@ -566,7 +558,6 @@ export default function Ficha() {
                   </table>
                 </div>
 
-                {/* Bio Info Compact */}
                 <div className="bg-gray-900/30 p-3 rounded border border-gray-700 text-xs space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -613,105 +604,13 @@ export default function Ficha() {
           )}
 
           {activeTab === "traits" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* LEFT: Picker */}
-              <div className="bg-gray-900 p-4 rounded border border-gray-700">
-                <h3 className="text-blue-400 font-bold uppercase text-sm mb-4">
-                  Add Advantages / Disadvantages
-                </h3>
-
-                {/* Lista Pré-definida */}
-                <div className="grid gap-2 mb-6">
-                  {SAMPLE_TRAITS.map((trait) => (
-                    // Alterado para um container flex para acomodar o botão de info
-                    <div key={trait.id} className="flex gap-1 group">
-                      <button
-                        onClick={() => addTrait(trait)}
-                        className="flex-1 flex justify-between items-center bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-600 text-left transition-all"
-                      >
-                        <span className="text-sm font-medium">
-                          {trait.label}
-                        </span>
-                        <span
-                          className={`text-xs font-mono font-bold ${
-                            trait.points > 0 ? "text-green-400" : "text-red-400"
-                          }`}
-                        >
-                          {trait.points > 0 ? "+" + trait.points : trait.points}
-                        </span>
-                      </button>
-
-                      {/* Botão de Info */}
-                      <button
-                        onClick={() => setViewingTrait(trait)}
-                        className="w-10 bg-gray-800 hover:bg-blue-900/50 border border-gray-600 rounded flex items-center justify-center text-blue-400 font-bold"
-                        title="View Description"
-                      >
-                        ?
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* RIGHT: Selected List (Editable) */}
-              <div className="bg-gray-900/50 p-4 rounded border border-gray-700">
-                <h3 className="text-green-400 font-bold uppercase text-sm mb-4">
-                  Selected Traits
-                </h3>
-                {ficha.traits.length === 0 && (
-                  <p className="text-gray-600 italic text-sm">
-                    No traits selected.
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {ficha.traits.map((t, i) => (
-                    <div
-                      key={i}
-                      className="bg-gray-800 p-2 rounded border border-gray-600 flex gap-2 items-center"
-                    >
-                      <div className="flex-1">
-                        <div className="flex justify-between mb-1">
-                          <span className="font-bold text-sm text-gray-200">
-                            {t.label}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-gray-500">Cost:</span>
-                            <input
-                              type="number"
-                              value={t.points}
-                              onChange={(e) =>
-                                updateTraitPoints(i, Number(e.target.value))
-                              }
-                              className="w-12 bg-gray-900 border border-gray-700 text-center text-xs text-white rounded focus:border-blue-500"
-                            />
-                          </div>
-                        </div>
-                        <input
-                          placeholder="Notes / Modifiers..."
-                          value={t.note || ""}
-                          onChange={(e) => {
-                            const newTraits = [...ficha.traits];
-                            newTraits[i].note = e.target.value;
-                            setFicha((prev) => ({
-                              ...prev,
-                              traits: newTraits,
-                            }));
-                          }}
-                          className="w-full bg-transparent text-xs text-gray-400 border-b border-gray-700/50 focus:border-blue-500 outline-none"
-                        />
-                      </div>
-                      <button
-                        onClick={() => removeTrait(i)}
-                        className="h-full px-2 text-red-500 hover:bg-red-900/20 rounded"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <TraitsTab
+              traits={ficha.traits}
+              onAdd={addTrait}
+              onRemove={removeTrait}
+              onUpdatePoints={updateTraitPoints}
+              onUpdateNote={updateTraitNote}
+            />
           )}
         </div>
       </div>
@@ -727,52 +626,6 @@ export default function Ficha() {
       >
         {saving ? "Salvando..." : "Salvar 💾"}
       </button>
-
-      {/* --- MODAL DE DESCRIÇÃO --- */}
-      {viewingTrait && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-gray-800 border border-gray-600 p-6 rounded-lg max-w-md w-full relative shadow-2xl">
-            <button
-              onClick={() => setViewingTrait(null)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-white"
-            >
-              ✕
-            </button>
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-bold text-white">
-                {viewingTrait.label}
-              </h3>
-              <span
-                className={`font-mono font-bold text-sm ${
-                  viewingTrait.points > 0 ? "text-green-400" : "text-red-400"
-                }`}
-              >
-                [{viewingTrait.points}]
-              </span>
-            </div>
-            <div className="text-gray-300 text-sm leading-relaxed mb-6">
-              {viewingTrait.description || "No description available."}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewingTrait(null)}
-                className="flex-1 py-2 px-4 bg-gray-700 hover:bg-gray-600 rounded text-gray-200 text-sm"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  addTrait(viewingTrait);
-                  setViewingTrait(null);
-                }}
-                className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-500 rounded text-white font-bold text-sm"
-              >
-                Add Trait
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
