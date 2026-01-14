@@ -1,9 +1,46 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getSheet, saveSheet } from "../actions";
-import NovaFichaWizard from "../../components/NovaFichaWizard"; // Ajuste o caminho se necessário
+import NovaFichaWizard from "../../components/NovaFichaWizard";
 
-// 1. Estado inicial extraído para constante para facilitar o reset
+// --- TABELA DE DANO SIMPLIFICADA (GURPS 4e) ---
+// Retorna { thr: string, sw: string } baseado na ST
+function getDamage(st: number) {
+  // Lógica simplificada para ST comuns.
+  // Para uma implementação completa, seria ideal uma tabela de lookup extensa ou algoritmo complexo.
+  if (st < 1) return { thr: "0", sw: "0" };
+
+  // Tabela manual para ST 1 a 20 (faixa mais comum)
+  const lookup: Record<number, { thr: string; sw: string }> = {
+    1: { thr: "1d-6", sw: "1d-5" },
+    2: { thr: "1d-6", sw: "1d-5" },
+    3: { thr: "1d-5", sw: "1d-4" },
+    4: { thr: "1d-5", sw: "1d-4" },
+    5: { thr: "1d-4", sw: "1d-3" },
+    6: { thr: "1d-4", sw: "1d-3" },
+    7: { thr: "1d-3", sw: "1d-2" },
+    8: { thr: "1d-3", sw: "1d-2" },
+    9: { thr: "1d-2", sw: "1d-1" },
+    10: { thr: "1d-2", sw: "1d" },
+    11: { thr: "1d-1", sw: "1d+1" },
+    12: { thr: "1d-1", sw: "1d+2" },
+    13: { thr: "1d", sw: "2d-1" },
+    14: { thr: "1d", sw: "2d" },
+    15: { thr: "1d+1", sw: "2d+1" },
+    16: { thr: "1d+1", sw: "2d+2" },
+    17: { thr: "1d+2", sw: "3d-1" },
+    18: { thr: "1d+2", sw: "3d" },
+    19: { thr: "2d-1", sw: "3d+1" },
+    20: { thr: "2d-1", sw: "3d+2" },
+  };
+
+  if (lookup[st]) return lookup[st];
+
+  // Fallback genérico para ST > 20 (aproximação)
+  // A cada +1 ST o dano sobe, mas segue uma escada. Aqui simplifico para não quebrar.
+  return { thr: `${Math.floor(st / 10)}d`, sw: `${Math.floor(st / 10) + 1}d` };
+}
+
 const INITIAL_STATE = {
   name: "",
   player: "",
@@ -21,16 +58,68 @@ export default function Ficha() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
-
   const [ficha, setFicha] = useState(INITIAL_STATE);
 
-  // Carregar dados
+  // --- CÁLCULOS DERIVADOS ---
+  // Estes valores são calculados "on the fly" baseados nos atributos.
+  // Se quiser permitir comprar HP/FP extra, precisaria adicionar campos no state (ex: hp_mod).
+  const { ST, DX, IQ, HT } = ficha.attributes;
+
+  const basicLift = (ST * ST) / 5; // BL = ST^2 / 5
+  // Basic Lift arredondado costuma ser usado para cálculos rápidos, mas mantemos 1 casa decimal se necessário.
+  const blDisplay =
+    basicLift >= 10 ? Math.round(basicLift) : basicLift.toFixed(1);
+
+  const hp = ST; // Default HP = ST
+  const will = IQ; // Default Will = IQ
+  const per = IQ; // Default Per = IQ
+  const fp = HT; // Default FP = HT
+
+  const basicSpeed = (HT + DX) / 4;
+  const basicMove = Math.floor(basicSpeed);
+
+  const damage = getDamage(ST);
+
+  // Níveis de Carga (Encumbrance)
+  const encumbranceLevels = [
+    {
+      level: "None (0)",
+      max: Math.round(basicLift),
+      move: basicMove,
+      dodge: 0,
+    },
+    {
+      level: "Light (1)",
+      max: Math.round(basicLift * 2),
+      move: Math.floor(basicMove * 0.8),
+      dodge: 1,
+    },
+    {
+      level: "Medium (2)",
+      max: Math.round(basicLift * 3),
+      move: Math.floor(basicMove * 0.6),
+      dodge: 2,
+    },
+    {
+      level: "Heavy (3)",
+      max: Math.round(basicLift * 6),
+      move: Math.floor(basicMove * 0.4),
+      dodge: 3,
+    },
+    {
+      level: "X-Hvy (4)",
+      max: Math.round(basicLift * 10),
+      move: Math.floor(basicMove * 0.2),
+      dodge: 4,
+    },
+  ];
+
+  // --- EFFECTS ---
+
   useEffect(() => {
     async function load() {
       try {
         const data = await getSheet();
-
-        // Verifica se existe dados e se não é um objeto vazio
         const hasData = data && Object.keys(data).length > 0;
 
         if (hasData) {
@@ -40,7 +129,6 @@ export default function Ficha() {
           };
           setFicha((prev) => ({ ...prev, ...safeData }));
         } else {
-          // Se JSON for {}, abre o modal
           setShowWizard(true);
         }
       } catch (error) {
@@ -52,10 +140,8 @@ export default function Ficha() {
     load();
   }, []);
 
-  // Recalcular pontos
   useEffect(() => {
     if (loading) return;
-
     const COSTS = { ST: 10, DX: 20, IQ: 20, HT: 10 };
     let spent = 0;
     spent += (ficha.attributes.ST - 10) * COSTS.ST;
@@ -64,53 +150,33 @@ export default function Ficha() {
     spent += (ficha.attributes.HT - 10) * COSTS.HT;
 
     const remaining = ficha.point_total - spent;
-
     if (ficha.unspent_pts !== remaining) {
       setFicha((prev) => ({ ...prev, unspent_pts: remaining }));
     }
   }, [ficha.attributes, ficha.point_total, loading]);
 
-  // Salvar
+  // --- HANDLERS ---
+
   async function handleSave(dataToSave = ficha) {
     setSaving(true);
     const res = await saveSheet(dataToSave);
     setSaving(false);
-
     if (res?.success) {
-      // Só mostra o alerta se NÃO for um save vazio (delete)
-      // Como usamos essa função pro delete tbm, podemos checar:
-      if (Object.keys(dataToSave).length > 0) {
-        alert("Ficha salva!");
-      }
+      if (Object.keys(dataToSave).length > 0) alert("Ficha salva!");
     } else {
       alert("Erro ao salvar.");
     }
-    return res; // Retorna o resultado para uso no handleDelete
+    return res;
   }
 
-  // 2. NOVA FUNÇÃO: Apagar Ficha
   const handleDelete = async () => {
-    const confirmDelete = window.confirm(
-      "Tem certeza que deseja apagar esta ficha permanentemente? Isso não pode ser desfeito."
-    );
-
-    if (!confirmDelete) return;
-
+    if (!window.confirm("Apagar ficha permanentemente?")) return;
     setSaving(true);
-
-    // Salva um JSON vazio "{}" no banco
     const res = await saveSheet({});
-
     setSaving(false);
-
     if (res?.success) {
-      // Reseta o estado local para o inicial
       setFicha(INITIAL_STATE);
-      // Abre o modal de criação (comportamento de "sem ficha")
       setShowWizard(true);
-      alert("Ficha apagada com sucesso.");
-    } else {
-      alert("Erro ao apagar a ficha.");
     }
   };
 
@@ -154,7 +220,7 @@ export default function Ficha() {
       )}
 
       <div className="max-w-4xl mx-auto bg-gray-800 border border-gray-700 shadow-2xl rounded-xl overflow-hidden">
-        {/* Header */}
+        {/* HEADER */}
         <div className="bg-gray-900 p-4 border-b border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-200 uppercase tracking-wider">
@@ -162,19 +228,14 @@ export default function Ficha() {
             </h1>
             <span className="text-xs text-gray-500">4th Edition</span>
           </div>
-
-          {/* Botões do Header */}
           <div className="flex gap-3">
-            {/* 3. Botão de Apagar */}
             <button
               onClick={handleDelete}
               disabled={saving}
-              title="Apagar ficha atual"
-              className="text-xs bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900 px-3 py-1.5 rounded transition-colors flex items-center gap-1"
+              className="text-xs bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900 px-3 py-1.5 rounded transition-colors"
             >
               🗑️ Apagar
             </button>
-
             <button
               onClick={() => setShowWizard(true)}
               className="text-xs bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-900 px-3 py-1.5 rounded transition-colors"
@@ -185,14 +246,14 @@ export default function Ficha() {
         </div>
 
         <div className="p-6 grid gap-6">
-          {/* Identidade */}
+          {/* Identity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputGroup label="Name">
               <input
                 name="name"
                 value={ficha.name}
                 onChange={handleChange}
-                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white outline-none focus:border-blue-500"
               />
             </InputGroup>
             <InputGroup label="Player">
@@ -200,14 +261,14 @@ export default function Ficha() {
                 name="player"
                 value={ficha.player}
                 onChange={handleChange}
-                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white outline-none focus:border-blue-500"
               />
             </InputGroup>
           </div>
 
           <hr className="border-gray-700" />
 
-          {/* Atributos */}
+          {/* PRIMARY ATTRIBUTES */}
           <div>
             <h3 className="text-xs font-bold text-blue-400 uppercase mb-3 tracking-widest">
               Primary Attributes
@@ -227,7 +288,7 @@ export default function Ficha() {
                       ficha.attributes[attr as keyof typeof ficha.attributes]
                     }
                     onChange={(e) => handleAttrChange(attr, e.target.value)}
-                    className="w-full bg-transparent text-center text-2xl font-bold text-white outline-none border-b border-gray-700 focus:border-blue-500"
+                    className="w-full bg-transparent text-center text-3xl font-bold text-white outline-none border-b border-gray-700 focus:border-blue-500"
                   />
                   <span className="text-[10px] text-gray-500 mt-1">
                     {attr === "ST" || attr === "HT" ? "±10" : "±20"} pts
@@ -237,7 +298,123 @@ export default function Ficha() {
             </div>
           </div>
 
-          {/* Dados Físicos e Pontos */}
+          {/* SECONDARY CHARACTERISTICS (Calculated) */}
+          <div className="bg-gray-900/30 p-4 rounded-lg border border-gray-700">
+            <h3 className="text-xs font-bold text-green-400 uppercase mb-3 tracking-widest">
+              Secondary Characteristics
+            </h3>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+              {/* HP & FP */}
+              <div className="flex flex-col items-center p-2 bg-gray-800 rounded border border-gray-600">
+                <span className="text-xs text-gray-400 uppercase font-bold">
+                  HP (Hit Points)
+                </span>
+                <span className="text-2xl font-bold text-white">{hp}</span>
+                <span className="text-[10px] text-gray-500">Based on ST</span>
+              </div>
+              <div className="flex flex-col items-center p-2 bg-gray-800 rounded border border-gray-600">
+                <span className="text-xs text-gray-400 uppercase font-bold">
+                  FP (Fatigue)
+                </span>
+                <span className="text-2xl font-bold text-white">{fp}</span>
+                <span className="text-[10px] text-gray-500">Based on HT</span>
+              </div>
+
+              {/* Will & Per */}
+              <div className="flex flex-col items-center p-2 bg-gray-800 rounded border border-gray-600">
+                <span className="text-xs text-gray-400 uppercase font-bold">
+                  Will
+                </span>
+                <span className="text-2xl font-bold text-white">{will}</span>
+                <span className="text-[10px] text-gray-500">Based on IQ</span>
+              </div>
+              <div className="flex flex-col items-center p-2 bg-gray-800 rounded border border-gray-600">
+                <span className="text-xs text-gray-400 uppercase font-bold">
+                  Per (Perception)
+                </span>
+                <span className="text-2xl font-bold text-white">{per}</span>
+                <span className="text-[10px] text-gray-500">Based on IQ</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column: Lift, Speed, Move */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-gray-800 p-2 rounded px-4">
+                  <span className="text-sm text-gray-400 font-bold">
+                    Basic Lift (BL)
+                  </span>
+                  <span className="text-lg font-mono text-yellow-400 font-bold">
+                    {blDisplay} kg
+                  </span>
+                </div>
+                <div className="flex justify-between items-center bg-gray-800 p-2 rounded px-4">
+                  <span className="text-sm text-gray-400 font-bold">
+                    Basic Speed
+                  </span>
+                  <span className="text-lg font-mono text-blue-400 font-bold">
+                    {basicSpeed.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center bg-gray-800 p-2 rounded px-4">
+                  <span className="text-sm text-gray-400 font-bold">
+                    Basic Move
+                  </span>
+                  <span className="text-lg font-mono text-blue-400 font-bold">
+                    {basicMove}
+                  </span>
+                </div>
+
+                {/* Damage Table Display */}
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="bg-gray-800 p-2 rounded flex flex-col items-center">
+                    <span className="text-[10px] uppercase text-gray-500">
+                      Thrust (GPE)
+                    </span>
+                    <span className="font-bold text-white">{damage.thr}</span>
+                  </div>
+                  <div className="bg-gray-800 p-2 rounded flex flex-col items-center">
+                    <span className="text-[10px] uppercase text-gray-500">
+                      Swing (BaL)
+                    </span>
+                    <span className="font-bold text-white">{damage.sw}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Encumbrance Table */}
+              <div className="bg-gray-800 rounded p-2 overflow-hidden text-xs">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-gray-700">
+                      <th className="pb-1 pl-2">Encumbrance</th>
+                      <th className="pb-1">Max Load</th>
+                      <th className="pb-1 text-right pr-2">Move</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-300">
+                    {encumbranceLevels.map((row) => (
+                      <tr
+                        key={row.level}
+                        className="border-b border-gray-700/50 last:border-0 hover:bg-gray-700/50"
+                      >
+                        <td className="py-1.5 pl-2 font-medium">{row.level}</td>
+                        <td className="py-1.5">{row.max} kg</td>
+                        <td className="py-1.5 text-right pr-2 font-mono text-blue-300">
+                          {row.move}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <hr className="border-gray-700" />
+
+          {/* PHYSICAL / INFO */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <InputGroup label="Point Total">
               <input
@@ -245,7 +422,7 @@ export default function Ficha() {
                 name="point_total"
                 value={ficha.point_total}
                 onChange={handleChange}
-                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center font-mono focus:bg-gray-600 transition-colors"
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center font-mono focus:bg-gray-600"
               />
             </InputGroup>
 
@@ -309,7 +486,6 @@ export default function Ficha() {
 
           <hr className="border-gray-700" />
 
-          {/* Aparência */}
           <InputGroup label="Appearance">
             <textarea
               name="appearance"
@@ -317,7 +493,7 @@ export default function Ficha() {
               value={ficha.appearance}
               onChange={handleChange}
               placeholder="Descreva a aparência..."
-              className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-blue-500 outline-none resize-none"
             />
           </InputGroup>
         </div>
