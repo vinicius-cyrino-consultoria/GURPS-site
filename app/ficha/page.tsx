@@ -2,25 +2,10 @@
 import { useEffect, useState } from "react";
 import { getSheet, saveSheet } from "../actions";
 import NovaFichaWizard from "../../components/NovaFichaWizard";
+import { SAMPLE_TRAITS } from "../../utils/utils";
 
 // --- DADOS DE EXEMPLO DE VANTAGENS (GURPS) ---
-const SAMPLE_TRAITS = [
-  { id: "combat_reflexes", label: "Combat Reflexes", points: 15 },
-  { id: "high_pain", label: "High Pain Threshold", points: 10 },
-  { id: "luck", label: "Luck", points: 15 },
-  { id: "luck_extra", label: "Luck (Extraordinary)", points: 30 },
-  { id: "ambidexterity", label: "Ambidexterity", points: 5 },
-  {
-    id: "fearlessness",
-    label: "Fearlessness (per level)",
-    points: 2,
-    hasLevel: true,
-  },
-  { id: "bad_temper", label: "Bad Temper (12)", points: -10 },
-  { id: "bloodlust", label: "Bloodlust (12)", points: -10 },
-  { id: "pacifism_self", label: "Pacifism (Self-Defense)", points: -15 },
-  { id: "honesty", label: "Honesty (12)", points: -10 },
-];
+// ADICIONADO: Campo 'description' para o modal
 
 // --- DADOS DE APARÊNCIA (GURPS 4e) ---
 const APPEARANCE_OPTIONS = [
@@ -136,6 +121,11 @@ export default function Ficha() {
   const [showWizard, setShowWizard] = useState(false);
   const [activeTab, setActiveTab] = useState<"main" | "traits">("main");
   const [ficha, setFicha] = useState(INITIAL_STATE);
+
+  // NOVO ESTADO: Controla qual traço está sendo exibido no modal
+  const [viewingTrait, setViewingTrait] = useState<
+    (typeof SAMPLE_TRAITS)[0] | null
+  >(null);
 
   // --- CÁLCULOS DERIVADOS ---
   const { ST, DX, IQ, HT } = ficha.attributes;
@@ -633,20 +623,33 @@ export default function Ficha() {
                 {/* Lista Pré-definida */}
                 <div className="grid gap-2 mb-6">
                   {SAMPLE_TRAITS.map((trait) => (
-                    <button
-                      key={trait.id}
-                      onClick={() => addTrait(trait)}
-                      className="flex justify-between items-center bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-600 text-left transition-all"
-                    >
-                      <span className="text-sm font-medium">{trait.label}</span>
-                      <span
-                        className={`text-xs font-mono font-bold ${
-                          trait.points > 0 ? "text-green-400" : "text-red-400"
-                        }`}
+                    // Alterado para um container flex para acomodar o botão de info
+                    <div key={trait.id} className="flex gap-1 group">
+                      <button
+                        onClick={() => addTrait(trait)}
+                        className="flex-1 flex justify-between items-center bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-600 text-left transition-all"
                       >
-                        {trait.points > 0 ? "+" + trait.points : trait.points}
-                      </span>
-                    </button>
+                        <span className="text-sm font-medium">
+                          {trait.label}
+                        </span>
+                        <span
+                          className={`text-xs font-mono font-bold ${
+                            trait.points > 0 ? "text-green-400" : "text-red-400"
+                          }`}
+                        >
+                          {trait.points > 0 ? "+" + trait.points : trait.points}
+                        </span>
+                      </button>
+
+                      {/* Botão de Info */}
+                      <button
+                        onClick={() => setViewingTrait(trait)}
+                        className="w-10 bg-gray-800 hover:bg-blue-900/50 border border-gray-600 rounded flex items-center justify-center text-blue-400 font-bold"
+                        title="View Description"
+                      >
+                        ?
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -724,6 +727,52 @@ export default function Ficha() {
       >
         {saving ? "Salvando..." : "Salvar 💾"}
       </button>
+
+      {/* --- MODAL DE DESCRIÇÃO --- */}
+      {viewingTrait && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-gray-800 border border-gray-600 p-6 rounded-lg max-w-md w-full relative shadow-2xl">
+            <button
+              onClick={() => setViewingTrait(null)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-white"
+            >
+              ✕
+            </button>
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-white">
+                {viewingTrait.label}
+              </h3>
+              <span
+                className={`font-mono font-bold text-sm ${
+                  viewingTrait.points > 0 ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                [{viewingTrait.points}]
+              </span>
+            </div>
+            <div className="text-gray-300 text-sm leading-relaxed mb-6">
+              {viewingTrait.description || "No description available."}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewingTrait(null)}
+                className="flex-1 py-2 px-4 bg-gray-700 hover:bg-gray-600 rounded text-gray-200 text-sm"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  addTrait(viewingTrait);
+                  setViewingTrait(null);
+                }}
+                className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-500 rounded text-white font-bold text-sm"
+              >
+                Add Trait
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
