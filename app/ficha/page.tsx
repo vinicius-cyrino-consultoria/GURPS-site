@@ -3,14 +3,84 @@ import { useEffect, useState } from "react";
 import { getSheet, saveSheet } from "../actions";
 import NovaFichaWizard from "../../components/NovaFichaWizard";
 
+// --- DADOS DE APARÊNCIA (GURPS 4e) ---
+const APPEARANCE_OPTIONS = [
+  {
+    id: "horrific",
+    label: "Horrific (Horrendo)",
+    points: -24,
+    reaction: "-6",
+    desc: "Monstruosidade indescritível.",
+  },
+  {
+    id: "monstrous",
+    label: "Monstrous (Monstruoso)",
+    points: -20,
+    reaction: "-5",
+    desc: "Visto como um monstro, não sapiente.",
+  },
+  {
+    id: "hideous",
+    label: "Hideous (Hediondo)",
+    points: -16,
+    reaction: "-4",
+    desc: "Repugnante (doenças, deformidades).",
+  },
+  {
+    id: "ugly",
+    label: "Ugly (Feio)",
+    points: -8,
+    reaction: "-2",
+    desc: "Aparência ruim, mas comum.",
+  },
+  {
+    id: "unattractive",
+    label: "Unattractive (Desinteressante)",
+    points: -4,
+    reaction: "-1",
+    desc: "Vago aspecto desagradável.",
+  },
+  {
+    id: "average",
+    label: "Average (Média)",
+    points: 0,
+    reaction: "0",
+    desc: "Mistura-se na multidão.",
+  },
+  {
+    id: "attractive",
+    label: "Attractive (Atraente)",
+    points: 4,
+    reaction: "+1",
+    desc: "Bonito, mas não de concurso.",
+  },
+  {
+    id: "beautiful",
+    label: "Beautiful/Handsome (Belo)",
+    points: 12,
+    reaction: "+4/+2",
+    desc: "+4 (atraídos) / +2 (outros).",
+  },
+  {
+    id: "very_beautiful",
+    label: "Very Beautiful (Muito Belo)",
+    points: 16,
+    reaction: "+6/+2",
+    desc: "+6 (atraídos) / +2 (outros).",
+  },
+  {
+    id: "transcendent",
+    label: "Transcendent (Transcendente)",
+    points: 20,
+    reaction: "+8/+2",
+    desc: "Espécime ideal (deuses/anjos).",
+  },
+];
+
 // --- TABELA DE DANO SIMPLIFICADA (GURPS 4e) ---
-// Retorna { thr: string, sw: string } baseado na ST
 function getDamage(st: number) {
-  // Lógica simplificada para ST comuns.
-  // Para uma implementação completa, seria ideal uma tabela de lookup extensa ou algoritmo complexo.
   if (st < 1) return { thr: "0", sw: "0" };
 
-  // Tabela manual para ST 1 a 20 (faixa mais comum)
   const lookup: Record<number, { thr: string; sw: string }> = {
     1: { thr: "1d-6", sw: "1d-5" },
     2: { thr: "1d-6", sw: "1d-5" },
@@ -35,9 +105,6 @@ function getDamage(st: number) {
   };
 
   if (lookup[st]) return lookup[st];
-
-  // Fallback genérico para ST > 20 (aproximação)
-  // A cada +1 ST o dano sobe, mas segue uma escada. Aqui simplifico para não quebrar.
   return { thr: `${Math.floor(st / 10)}d`, sw: `${Math.floor(st / 10) + 1}d` };
 }
 
@@ -51,7 +118,8 @@ const INITIAL_STATE = {
   weight: "",
   size_modifier: 0,
   age: "",
-  appearance: "",
+  appearance: "", // Descrição textual (cabelo, olhos, cicatrizes)
+  appearance_id: "average", // ID para cálculo de pontos
 };
 
 export default function Ficha() {
@@ -61,26 +129,23 @@ export default function Ficha() {
   const [ficha, setFicha] = useState(INITIAL_STATE);
 
   // --- CÁLCULOS DERIVADOS ---
-  // Estes valores são calculados "on the fly" baseados nos atributos.
-  // Se quiser permitir comprar HP/FP extra, precisaria adicionar campos no state (ex: hp_mod).
   const { ST, DX, IQ, HT } = ficha.attributes;
 
-  const basicLift = (ST * ST) / 5; // BL = ST^2 / 5
-  // Basic Lift arredondado costuma ser usado para cálculos rápidos, mas mantemos 1 casa decimal se necessário.
+  const basicLift = (ST * ST) / 5;
   const blDisplay =
     basicLift >= 10 ? Math.round(basicLift) : basicLift.toFixed(1);
 
-  const hp = ST; // Default HP = ST
-  const will = IQ; // Default Will = IQ
-  const per = IQ; // Default Per = IQ
-  const fp = HT; // Default FP = HT
+  const hp = ST;
+  const will = IQ;
+  const per = IQ;
+  const fp = HT;
 
   const basicSpeed = (HT + DX) / 4;
   const basicMove = Math.floor(basicSpeed);
 
   const damage = getDamage(ST);
 
-  // Níveis de Carga (Encumbrance)
+  // Níveis de Carga
   const encumbranceLevels = [
     {
       level: "None (0)",
@@ -114,6 +179,11 @@ export default function Ficha() {
     },
   ];
 
+  // Recuperar dados da aparência atual para exibir na UI
+  const currentAppearance =
+    APPEARANCE_OPTIONS.find((a) => a.id === ficha.appearance_id) ||
+    APPEARANCE_OPTIONS[5];
+
   // --- EFFECTS ---
 
   useEffect(() => {
@@ -126,6 +196,8 @@ export default function Ficha() {
           const safeData = {
             ...data,
             attributes: data.attributes || { ST: 10, DX: 10, IQ: 10, HT: 10 },
+            // Garante que appearance_id exista, senão default para average
+            appearance_id: data.appearance_id || "average",
           };
           setFicha((prev) => ({ ...prev, ...safeData }));
         } else {
@@ -140,20 +212,28 @@ export default function Ficha() {
     load();
   }, []);
 
+  // --- CÁLCULO DE PONTOS GASTOS ---
   useEffect(() => {
     if (loading) return;
     const COSTS = { ST: 10, DX: 20, IQ: 20, HT: 10 };
     let spent = 0;
+
+    // Atributos
     spent += (ficha.attributes.ST - 10) * COSTS.ST;
     spent += (ficha.attributes.DX - 10) * COSTS.DX;
     spent += (ficha.attributes.IQ - 10) * COSTS.IQ;
     spent += (ficha.attributes.HT - 10) * COSTS.HT;
 
+    // Aparência
+    const appCost =
+      APPEARANCE_OPTIONS.find((a) => a.id === ficha.appearance_id)?.points || 0;
+    spent += appCost;
+
     const remaining = ficha.point_total - spent;
     if (ficha.unspent_pts !== remaining) {
       setFicha((prev) => ({ ...prev, unspent_pts: remaining }));
     }
-  }, [ficha.attributes, ficha.point_total, loading]);
+  }, [ficha.attributes, ficha.point_total, ficha.appearance_id, loading]);
 
   // --- HANDLERS ---
 
@@ -298,7 +378,7 @@ export default function Ficha() {
             </div>
           </div>
 
-          {/* SECONDARY CHARACTERISTICS (Calculated) */}
+          {/* SECONDARY CHARACTERISTICS */}
           <div className="bg-gray-900/30 p-4 rounded-lg border border-gray-700">
             <h3 className="text-xs font-bold text-green-400 uppercase mb-3 tracking-widest">
               Secondary Characteristics
@@ -486,16 +566,78 @@ export default function Ficha() {
 
           <hr className="border-gray-700" />
 
-          <InputGroup label="Appearance">
-            <textarea
-              name="appearance"
-              rows={3}
-              value={ficha.appearance}
-              onChange={handleChange}
-              placeholder="Descreva a aparência..."
-              className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-blue-500 outline-none resize-none"
-            />
-          </InputGroup>
+          {/* NOVO BLOCO: APPEARANCE */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <div className="flex flex-col gap-4">
+              <InputGroup label="Appearance Level">
+                <div className="relative">
+                  <select
+                    name="appearance_id"
+                    value={ficha.appearance_id}
+                    onChange={handleChange}
+                    className="w-full appearance-none bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-blue-500 outline-none pr-8"
+                  >
+                    {APPEARANCE_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label} (
+                        {opt.points > 0 ? "+" + opt.points : opt.points})
+                      </option>
+                    ))}
+                  </select>
+                  {/* Ícone de seta simples para customizar o select */}
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                    <svg
+                      className="fill-current h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
+              </InputGroup>
+
+              {/* Info Box sobre a aparência selecionada */}
+              <div className="bg-gray-900/40 border border-gray-700 rounded p-3 text-sm">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-400 text-xs uppercase font-bold">
+                    Reaction Modifier
+                  </span>
+                  <span
+                    className={`font-mono font-bold ${
+                      currentAppearance.points >= 0
+                        ? "text-green-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {currentAppearance.reaction}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-400 text-xs uppercase font-bold">
+                    Cost
+                  </span>
+                  <span className="font-mono text-white">
+                    {currentAppearance.points} pts
+                  </span>
+                </div>
+                <div className="mt-2 text-xs text-gray-500 italic border-t border-gray-700 pt-2">
+                  {currentAppearance.desc}
+                </div>
+              </div>
+            </div>
+
+            <InputGroup label="Appearance Details">
+              <textarea
+                name="appearance"
+                rows={5}
+                value={ficha.appearance}
+                onChange={handleChange}
+                placeholder="Descreva detalhes específicos: cor dos olhos, estilo de cabelo, roupas, cicatrizes..."
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-blue-500 outline-none resize-none"
+              />
+            </InputGroup>
+          </div>
         </div>
       </div>
 
