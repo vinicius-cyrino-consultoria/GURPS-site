@@ -3,47 +3,48 @@ import { useEffect, useState } from "react";
 import { getSheet, saveSheet } from "../actions";
 import NovaFichaWizard from "../../components/NovaFichaWizard"; // Ajuste o caminho se necessário
 
+// 1. Estado inicial extraído para constante para facilitar o reset
+const INITIAL_STATE = {
+  name: "",
+  player: "",
+  point_total: 150,
+  unspent_pts: 0,
+  attributes: { ST: 10, DX: 10, IQ: 10, HT: 10 },
+  height: "",
+  weight: "",
+  size_modifier: 0,
+  age: "",
+  appearance: "",
+};
+
 export default function Ficha() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
 
-  // Estado inicial padrão (ficha vazia/nova)
-  const [ficha, setFicha] = useState({
-    name: "",
-    player: "",
-    point_total: 150,
-    unspent_pts: 0,
-    attributes: { ST: 10, DX: 10, IQ: 10, HT: 10 },
-    height: "",
-    weight: "",
-    size_modifier: 0,
-    age: "",
-    appearance: "",
-  });
+  const [ficha, setFicha] = useState(INITIAL_STATE);
 
-  // 1. LÓGICA ALTERADA: Carregar dados e decidir se abre o Wizard
+  // Carregar dados
   useEffect(() => {
     async function load() {
       try {
         const data = await getSheet();
 
-        // Verifica se data existe e se NÃO é um objeto vazio
+        // Verifica se existe dados e se não é um objeto vazio
         const hasData = data && Object.keys(data).length > 0;
 
         if (hasData) {
-          // Se TEM dados, carrega na ficha
           const safeData = {
             ...data,
             attributes: data.attributes || { ST: 10, DX: 10, IQ: 10, HT: 10 },
           };
           setFicha((prev) => ({ ...prev, ...safeData }));
         } else {
-          // Se NÃO tem dados (JSON {}), abre direto o modal de criação
+          // Se JSON for {}, abre o modal
           setShowWizard(true);
         }
       } catch (error) {
-        console.error("Erro ao carregar ficha:", error);
+        console.error("Erro ao carregar:", error);
       } finally {
         setLoading(false);
       }
@@ -51,12 +52,11 @@ export default function Ficha() {
     load();
   }, []);
 
-  // 2. Recalcular pontos restantes automaticamente
+  // Recalcular pontos
   useEffect(() => {
     if (loading) return;
 
     const COSTS = { ST: 10, DX: 20, IQ: 20, HT: 10 };
-
     let spent = 0;
     spent += (ficha.attributes.ST - 10) * COSTS.ST;
     spent += (ficha.attributes.DX - 10) * COSTS.DX;
@@ -70,18 +70,49 @@ export default function Ficha() {
     }
   }, [ficha.attributes, ficha.point_total, loading]);
 
-  // Salvar dados
+  // Salvar
   async function handleSave(dataToSave = ficha) {
     setSaving(true);
     const res = await saveSheet(dataToSave);
     setSaving(false);
 
     if (res?.success) {
-      alert("Ficha salva!");
+      // Só mostra o alerta se NÃO for um save vazio (delete)
+      // Como usamos essa função pro delete tbm, podemos checar:
+      if (Object.keys(dataToSave).length > 0) {
+        alert("Ficha salva!");
+      }
     } else {
       alert("Erro ao salvar.");
     }
+    return res; // Retorna o resultado para uso no handleDelete
   }
+
+  // 2. NOVA FUNÇÃO: Apagar Ficha
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm(
+      "Tem certeza que deseja apagar esta ficha permanentemente? Isso não pode ser desfeito."
+    );
+
+    if (!confirmDelete) return;
+
+    setSaving(true);
+
+    // Salva um JSON vazio "{}" no banco
+    const res = await saveSheet({});
+
+    setSaving(false);
+
+    if (res?.success) {
+      // Reseta o estado local para o inicial
+      setFicha(INITIAL_STATE);
+      // Abre o modal de criação (comportamento de "sem ficha")
+      setShowWizard(true);
+      alert("Ficha apagada com sucesso.");
+    } else {
+      alert("Erro ao apagar a ficha.");
+    }
+  };
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
@@ -95,17 +126,14 @@ export default function Ficha() {
     const numValue = Number(value);
     setFicha((prev) => ({
       ...prev,
-      attributes: {
-        ...prev.attributes,
-        [attr]: numValue,
-      },
+      attributes: { ...prev.attributes, [attr]: numValue },
     }));
   };
 
   const handleCreateNew = async (newCharData: any) => {
     setShowWizard(false);
-    setFicha(newCharData); // Atualiza a UI com os dados do Wizard
-    await handleSave(newCharData); // Salva no banco imediatamente
+    setFicha(newCharData);
+    await handleSave(newCharData);
   };
 
   if (loading) {
@@ -118,7 +146,6 @@ export default function Ficha() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 pb-24 relative">
-      {/* O Wizard é renderizado aqui se showWizard for true */}
       {showWizard && (
         <NovaFichaWizard
           onCancel={() => setShowWizard(false)}
@@ -126,25 +153,35 @@ export default function Ficha() {
         />
       )}
 
-      {/* OPCIONAL: Se quiser esconder a ficha completamente enquanto o wizard estiver aberto 
-        quando não houver dados, você pode adicionar uma classe de opacidade ou condicional.
-        Por padrão, deixei visível ao fundo (como é comum em modais), mas abaixo está a estrutura normal.
-      */}
-
       <div className="max-w-4xl mx-auto bg-gray-800 border border-gray-700 shadow-2xl rounded-xl overflow-hidden">
-        <div className="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center">
+        {/* Header */}
+        <div className="bg-gray-900 p-4 border-b border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-200 uppercase tracking-wider">
               GURPS Character Sheet
             </h1>
             <span className="text-xs text-gray-500">4th Edition</span>
           </div>
-          <button
-            onClick={() => setShowWizard(true)}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-900 px-3 py-1.5 rounded transition-colors"
-          >
-            + Novo Personagem
-          </button>
+
+          {/* Botões do Header */}
+          <div className="flex gap-3">
+            {/* 3. Botão de Apagar */}
+            <button
+              onClick={handleDelete}
+              disabled={saving}
+              title="Apagar ficha atual"
+              className="text-xs bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900 px-3 py-1.5 rounded transition-colors flex items-center gap-1"
+            >
+              🗑️ Apagar
+            </button>
+
+            <button
+              onClick={() => setShowWizard(true)}
+              className="text-xs bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-900 px-3 py-1.5 rounded transition-colors"
+            >
+              + Novo Personagem
+            </button>
+          </div>
         </div>
 
         <div className="p-6 grid gap-6">
