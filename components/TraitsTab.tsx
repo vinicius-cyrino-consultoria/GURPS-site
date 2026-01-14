@@ -11,7 +11,9 @@ interface TraitItem {
   points: number;
   note?: string;
   description?: string;
-  // Campos para filtros (opcionais, pois o dado pode não ter ainda)
+  // Novo campo adicionado:
+  special_limitations?: string;
+  // Campos para filtros
   physical_type?: "mental" | "physical" | "social";
   rarity?: "mundane" | "exotic" | "supernatural";
 }
@@ -44,20 +46,20 @@ export default function TraitsTab({
     "all" | "mundane" | "exotic" | "supernatural"
   >("all");
 
-  // 3. Lógica de Filtragem (useMemo para performance, embora opcional em listas pequenas)
+  // 3. Lógica de Filtragem
   const filteredTraits = useMemo(() => {
     return SAMPLE_TRAITS.filter((t: any) => {
-      const trait = t as TraitItem; // Cast para garantir tipagem interna
+      const trait = t as TraitItem;
 
-      // Filtro 1: Type (Baseado nos pontos: Positivo = Vantagem, Negativo = Desvantagem)
+      // Filtro 1: Type
       if (filterType === "advantage" && trait.points < 0) return false;
       if (filterType === "disadvantage" && trait.points >= 0) return false;
 
-      // Filtro 2: Physical Type (Mental, Physical, Social)
+      // Filtro 2: Physical Type
       if (filterPhy !== "all" && trait.physical_type !== filterPhy)
         return false;
 
-      // Filtro 3: Rarity (Mundane, Exotic, Supernatural)
+      // Filtro 3: Rarity
       if (filterRarity !== "all" && trait.rarity !== filterRarity) return false;
 
       return true;
@@ -267,9 +269,24 @@ export default function TraitsTab({
                 [{viewingTrait.points}]
               </span>
             </div>
-            <div className="text-gray-300 text-sm leading-relaxed mb-6">
+
+            {/* Descrição Principal */}
+            <div className="text-gray-300 text-sm leading-relaxed mb-4">
               {viewingTrait.description || "No description available."}
             </div>
+
+            {/* --- NOVO CAMPO: SPECIAL LIMITATIONS --- */}
+            {viewingTrait.special_limitations && (
+              <div className="mb-6 p-3 bg-red-900/20 border border-red-700/40 rounded">
+                <span className="block text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">
+                  Special Limitations
+                </span>
+                <p className="text-red-200 text-sm italic">
+                  {viewingTrait.special_limitations}
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button
                 onClick={() => setViewingTrait(null)}
